@@ -1,0 +1,33 @@
+{
+  "name": "collabboard",
+  "version": "1.0.0",
+  "description": "Real-time collaborative workspace with documents, kanban, chat, and video calling",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm run --parallel dev",
+    "dev:web": "pnpm --filter @collabboard/web dev",
+    "dev:server": "pnpm --filter @collabboard/server dev",
+    "build": "pnpm run --parallel build",
+    "lint": "pnpm run --parallel lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "clean": "pnpm run --parallel clean",
+    "db:generate": "pnpm --filter @collabboard/server db:generate",
+    "db:push": "pnpm --filter @collabboard/server db:push",
+    "db:studio": "pnpm --filter @collabboard/server db:studio"
+  },
+  "keywords": [
+    "collaboration",
+    "realtime",
+    "kanban",
+    "documents",
+    "chat",
+    "video"
+  ],
+  "author": "Sambu Sairaju",
+  "license": "MIT",
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

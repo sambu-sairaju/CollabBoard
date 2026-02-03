@@ -1,0 +1,15 @@
+{
+  "name": "@collabboard/types",
+  "version": "1.0.0",
+  "description": "Shared TypeScript types for CollabBoard",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

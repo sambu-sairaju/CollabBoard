@@ -1,0 +1,497 @@
+// This is your Prisma schema file
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// USER & AUTH
+// ==========================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String?   // Null for OAuth-only users
+  avatar        String?
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts           Account[]
+  sessions           Session[]
+  workspaceMembers   WorkspaceMember[]
+  ownedWorkspaces    Workspace[]         @relation("WorkspaceOwner")
+  documents          Document[]          @relation("DocumentCreator")
+  boards             Board[]             @relation("BoardCreator")
+  cards              Card[]              @relation("CardCreator")
+  cardAssignees      CardAssignee[]
+  messages           Message[]
+  notifications      Notification[]
+  files              File[]              @relation("FileUploader")
+  activityLogs       ActivityLog[]
+  channelMembers     ChannelMember[]
+
+  @@index([email])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String  // oauth, credentials
+  provider          String  // google, github, email
+  providerAccountId String
+  refreshToken      String? @db.Text
+  accessToken       String? @db.Text
+  expiresAt         Int?
+  tokenType         String?
+  scope             String?
+  idToken           String? @db.Text
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  userAgent    String?
+  ipAddress    String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+model VerificationToken {
+  id         String   @id @default(cuid())
+  email      String
+  token      String   @unique
+  type       String   // email_verification, password_reset
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@unique([email, token])
+}
+
+// ==========================================
+// WORKSPACE
+// ==========================================
+
+model Workspace {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  logo        String?
+  ownerId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  owner        User               @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  members      WorkspaceMember[]
+  invites      WorkspaceInvite[]
+  documents    Document[]
+  boards       Board[]
+  channels     Channel[]
+  files        File[]
+  folders      Folder[]
+  activityLogs ActivityLog[]
+
+  @@index([ownerId])
+  @@index([slug])
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        WorkspaceRole @default(MEMBER)
+  joinedAt    DateTime      @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId])
+}
+
+model WorkspaceInvite {
+  id          String        @id @default(cuid())
+  email       String
+  workspaceId String
+  role        WorkspaceRole @default(MEMBER)
+  token       String        @unique
+  invitedById String
+  expiresAt   DateTime
+  createdAt   DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([token])
+}
+
+// ==========================================
+// DOCUMENTS
+// ==========================================
+
+model Document {
+  id          String   @id @default(cuid())
+  title       String
+  content     String?  @db.Text
+  icon        String?
+  coverImage  String?
+  isPublished Boolean  @default(false)
+  workspaceId String
+  createdById String
+  parentId    String?  // For nested documents
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User               @relation("DocumentCreator", fields: [createdById], references: [id])
+  parent    Document?          @relation("DocumentChildren", fields: [parentId], references: [id])
+  children  Document[]         @relation("DocumentChildren")
+  versions  DocumentVersion[]
+  comments  DocumentComment[]
+
+  @@index([workspaceId])
+  @@index([createdById])
+  @@index([parentId])
+}
+
+model DocumentVersion {
+  id         String   @id @default(cuid())
+  documentId String
+  content    String   @db.Text
+  createdAt  DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+}
+
+model DocumentComment {
+  id         String   @id @default(cuid())
+  documentId String
+  userId     String
+  content    String
+  createdAt  DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+}
+
+// ==========================================
+// KANBAN BOARDS
+// ==========================================
+
+model Board {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  workspaceId String
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User      @relation("BoardCreator", fields: [createdById], references: [id])
+  columns   Column[]
+
+  @@index([workspaceId])
+}
+
+model Column {
+  id      String @id @default(cuid())
+  title   String
+  order   Int
+  boardId String
+
+  board Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards Card[]
+
+  @@index([boardId])
+}
+
+model Card {
+  id          String    @id @default(cuid())
+  title       String
+  description String?   @db.Text
+  order       Int
+  columnId    String
+  createdById String
+  dueDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  column     Column          @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  createdBy  User            @relation("CardCreator", fields: [createdById], references: [id])
+  assignees  CardAssignee[]
+  labels     CardLabel[]
+  checklists CardChecklist[]
+  comments   CardComment[]
+  attachments CardAttachment[]
+
+  @@index([columnId])
+}
+
+model CardAssignee {
+  id     String @id @default(cuid())
+  cardId String
+  userId String
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([cardId, userId])
+}
+
+model CardLabel {
+  id     String @id @default(cuid())
+  name   String
+  color  String
+  cardId String
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId])
+}
+
+model CardChecklist {
+  id     String @id @default(cuid())
+  title  String
+  cardId String
+
+  card  Card               @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  items ChecklistItem[]
+
+  @@index([cardId])
+}
+
+model ChecklistItem {
+  id          String  @id @default(cuid())
+  title       String
+  isCompleted Boolean @default(false)
+  checklistId String
+
+  checklist CardChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+
+  @@index([checklistId])
+}
+
+model CardComment {
+  id        String   @id @default(cuid())
+  cardId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId])
+}
+
+model CardAttachment {
+  id     String @id @default(cuid())
+  cardId String
+  fileId String @unique
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId])
+}
+
+// ==========================================
+// CHAT
+// ==========================================
+
+enum ChannelType {
+  WORKSPACE // Public channel in workspace
+  DIRECT    // 1-on-1 DM
+  GROUP     // Group DM
+}
+
+model Channel {
+  id          String      @id @default(cuid())
+  name        String?
+  type        ChannelType
+  workspaceId String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members   ChannelMember[]
+  messages  Message[]
+
+  @@index([workspaceId])
+}
+
+model ChannelMember {
+  id        String   @id @default(cuid())
+  channelId String
+  userId    String
+  joinedAt  DateTime @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  channelId String
+  senderId  String
+  parentId  String?  // For threads
+  isEdited  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  channel   Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  sender    User              @relation(fields: [senderId], references: [id])
+  parent    Message?          @relation("MessageReplies", fields: [parentId], references: [id])
+  replies   Message[]         @relation("MessageReplies")
+  reactions MessageReaction[]
+  attachments MessageAttachment[]
+
+  @@index([channelId])
+  @@index([senderId])
+  @@index([parentId])
+}
+
+model MessageReaction {
+  id        String @id @default(cuid())
+  emoji     String
+  userId    String
+  messageId String
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+}
+
+model MessageAttachment {
+  id        String @id @default(cuid())
+  messageId String
+  fileId    String
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+// ==========================================
+// FILES
+// ==========================================
+
+model File {
+  id           String   @id @default(cuid())
+  name         String
+  url          String
+  size         Int
+  mimeType     String
+  workspaceId  String
+  uploadedById String
+  folderId     String?
+  createdAt    DateTime @default(now())
+
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  uploadedBy User      @relation("FileUploader", fields: [uploadedById], references: [id])
+  folder     Folder?   @relation(fields: [folderId], references: [id])
+
+  @@index([workspaceId])
+  @@index([folderId])
+}
+
+model Folder {
+  id          String   @id @default(cuid())
+  name        String
+  workspaceId String
+  parentId    String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent    Folder?   @relation("FolderChildren", fields: [parentId], references: [id])
+  children  Folder[]  @relation("FolderChildren")
+  files     File[]
+
+  @@index([workspaceId])
+  @@index([parentId])
+}
+
+// ==========================================
+// NOTIFICATIONS
+// ==========================================
+
+enum NotificationType {
+  MENTION
+  ASSIGNMENT
+  COMMENT
+  INVITE
+  DUE_DATE
+  MESSAGE
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  title     String
+  message   String
+  userId    String
+  isRead    Boolean          @default(false)
+  link      String?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+}
+
+// ==========================================
+// ACTIVITY LOG
+// ==========================================
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  action      String
+  entityType  String
+  entityId    String
+  userId      String
+  workspaceId String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id])
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([entityType, entityId])
+}
