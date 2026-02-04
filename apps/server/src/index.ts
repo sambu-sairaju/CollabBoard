@@ -6,6 +6,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import passport from './lib/passport';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -51,6 +52,9 @@ app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+// Initialize Passport for OAuth
+app.use(passport.initialize());
 
 // Health check endpoint
 app.get('/health', (req, res) => {
